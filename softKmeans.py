@@ -1,83 +1,63 @@
 #!/usr/bin/env python3
 
+import sys
 import numpy as np
-import matplotlib.pyplot as plt
 
-def initialize_centers(x, num_k):
+def decide_centers(data, num_k):
     # nrow, ncol
-    N, D = x.shape
+    N, D = data.shape
     # initialize empty array; ncol = num k, same dim as data
     centers = np.zeros((num_k, D))
-    used_idx = []
+    old_idx = []
     # randomly choose k number of indices from the data
     # then save them as centers in a random order
     for k in range(num_k):
         idx = np.random.choice(N)
-        while idx in used_idx:
+        while idx in old_idx:
             idx = np.random.choice(N)
-        used_idx.append(idx)
-        centers[k] = x[idx]
+        old_idx.append(idx)
+        centers[k] = data[idx]
     return centers
 
-def cluster_responsibilities(centers, x, beta):
+def centers_to_clusters(centers, data, beta):
     # initialize matrix w/ ncol = num k and nrow = num data points
-    N,_ = x.shape
-    K, D = centers.shape
-    R = np.zeros((N, K))
-
+    N,_ = data.shape
+    num_k,_ = centers.shape
+    resp_mat = np.zeros((N, num_k))
+    # generate responsibility matrix
     for n in range(N):
-        R[n] = np.exp(-beta * np.linalg.norm(centers-x[n], ord=2, axis=1))
-        R /= R.sum(axis=1, keepdims=True)
-    return R
+        resp_mat[n] = np.exp(-beta * np.linalg.norm(centers-data[n], ord=2, axis=1))
+        resp_mat /= resp_mat.sum(axis=1, keepdims=True)
+    return resp_mat
 
-def update_centers(x, r, num_k):
-    N, D = x.shape
-    centers = np.zeros((num_k, D))
+def clusters_to_centers(data, resp_mat, num_k):
+    N, dim = data.shape
+    centers = np.zeros((num_k, dim))
+    # update center to the weighted center of gravity
     for k in range(num_k):
-        centers[k] = r[:,k].dot(x) / r[:,k].sum()
+        centers[k] = resp_mat[:,k].dot(data) / resp_mat[:,k].sum()
     return centers
 
-def square_dist(a, b):
-    return (a-b) ** 2
-
-def cost_func(x, r, centers, num_k):
-    cost = 0
-    for k in range(num_k):
-        norm = np.linalg.norm(x - centers[k], 2)
-        cost += (norm * np.expand_dims(r[:, k], axis=1)).sum()
-    return cost
-
-def soft_k_means(x, num_k, max_iters=20, beta=.1):
-    centers = initialize_centers(x, num_k)
-    prev_cost = 0
+def soft_kMeans(data, num_k, beta, max_iters=100):
+    centers = decide_centers(data, num_k)
     for _ in range(max_iters):
-        r = cluster_responsibilities(centers, x, beta)
-        centers = update_centers(x, r, num_k)
-        cost = cost_func(x, r, centers, num_k)
-        if np.abs(cost - prev_cost) < 1e-5:
-            break
-        prev_cost = cost
+        resp = centers_to_clusters(centers, data, beta)
+        centers = clusters_to_centers(data, resp, num_k)
     return centers
-
-
-def generate_samples(std=1, dim=2, dist=4):
-    mu0 = np.array([0,0])
-    mu1 = np.array([dist, dist])
-    mu2 = np.array([0, dist])
-    # Number of samples per class
-    Nc = 300
-    # Initialize array ncol Nc nrow dim 
-    x0 = np.random.randn(Nc, dim) * std + mu0
-    x1 = np.random.randn(Nc, dim) * std + mu1
-    x2 = np.random.randn(Nc, dim) * std + mu2
-    # stack vertically
-    x = np.concatenate((x0, x1, x2), axis=0)
-    return x
 
 def main():
-    X = generate_samples()
-    soft_k_means(x=X, num_k=3)
+    with open('rosalind_ba8d.txt') as f:
+        k, m = map(int, f.readline().split())
+        b = float(f.readline().strip())
+        mat = [[float(num) for num in line.split(' ')] for line in f]
+        mat = np.array(mat)
 
-if __name__ == "__main__"
+    Centers = soft_kMeans(data=mat, num_k=k, beta=b)
+    Centers = np.flipud(Centers)
+    txt = np.savetxt('res.txt', Centers, fmt="%.3f")
+    out = open('res.txt', 'r')
+    print(out.read())
+
+if __name__ == "__main__":
     main()
 
